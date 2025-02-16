@@ -189,3 +189,14 @@ jobs:
         with:
           name: security-scan-summary
           path: scan-summary.md
+
+  
+  sync-to-jira:
+    needs: security-scan  # This ensures sync runs after scanning completes
+    uses: application-armor/security-workflow-template/.github/workflows/vulnerability-sync.yml@main
+    secrets:
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+      JIRA_EPIC_KEY: ${{ secrets.JIRA_EPIC_KEY }}
+    
