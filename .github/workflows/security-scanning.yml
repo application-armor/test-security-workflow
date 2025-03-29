@@ -1,0 +1,134 @@
+name: Security Scanning Demo
+
+# Run on push to any branch and on pull requests
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "main" ]
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  # SAST scanning with CodeQL
+  sast-scan:
+    name: Static Application Security Testing
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: javascript, python, java
+          
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+        
+      - name: Upload SAST results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: ${{ runner.temp }}/codeql_results
+          
+  # SCA scanning with Dependency-Check
+  sca-scan:
+    name: Software Composition Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        
+      - name: Run Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'Test Project'
+          path: '.'
+          format: 'HTML'
+          out: 'reports'
+          args: >
+            --enableExperimental
+            --scan **/*
+            
+      - name: Upload SCA results
+        uses: actions/upload-artifact@v3
+        with:
+          name: Dependency-Check-Report
+          path: reports
+  
+  # Container Scanning with Trivy
+  container-scan:
+    name: Container Image Scanning
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        
+      - name: Build container image
+        run: |
+          # Build your container image here
+          # Example:
+          # docker build -t test-image:latest .
+          # For demonstration, we'll scan an existing image
+          echo "Using ubuntu:latest as demo image"
+          
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ubuntu:latest'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          
+  # Secret Scanning with TruffleHog
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          
+      - name: Run TruffleHog
+        uses: trufflesecurity/trufflehog-actions-scanning@master
+        with:
+          path: ${{ github.workspace }}
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+        continue-on-error: true
+        
+  # Generate Security Report
+  security-report:
+    name: Generate Security Report
+    needs: [sast-scan, sca-scan, container-scan, secret-scan]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Create Report Summary
+        run: |
+          echo "# Security Scanning Report" > security-report.md
+          echo "## Scan Overview" >> security-report.md
+          echo "- SAST: Completed" >> security-report.md
+          echo "- SCA: Completed" >> security-report.md
+          echo "- Container Scanning: Completed" >> security-report.md
+          echo "- Secret Scanning: Completed" >> security-report.md
+          echo "## Results" >> security-report.md
+          echo "Check the detailed reports in the workflow artifacts to see any detected vulnerabilities." >> security-report.md
+      
+      - name: Upload Security Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: Security-Scanning-Report
+          path: security-report.md
